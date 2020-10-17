@@ -19,6 +19,8 @@ import warnings
 import webbrowser
 
 import requests
+from typing import Callable
+
 from spotipy.util import CLIENT_CREDS_ENV_VARS, get_host_port
 from spotipy.exceptions import SpotifyException
 
@@ -27,7 +29,6 @@ import six
 import six.moves.urllib.parse as urllibparse
 from six.moves.BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from six.moves.urllib_parse import urlparse, parse_qsl
-
 logger = logging.getLogger(__name__)
 
 
@@ -235,6 +236,7 @@ class SpotifyOAuth(SpotifyAuthBase):
 
     def __init__(
             self,
+            authorization_window: Callable,
             client_id=None,
             client_secret=None,
             redirect_uri=None,
@@ -269,7 +271,7 @@ class SpotifyOAuth(SpotifyAuthBase):
         """
 
         super(SpotifyOAuth, self).__init__(requests_session)
-
+        self.authorization_window = authorization_window
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
@@ -391,11 +393,7 @@ class SpotifyOAuth(SpotifyAuthBase):
             prompt = "Enter the URL you were redirected to: "
         else:
             url = self.get_authorize_url()
-            prompt = (
-                "Go to the following URL: {}\n"
-                "Enter the URL you were redirected to: ".format(url)
-            )
-        response = self._get_user_input(prompt)
+        response = self.authorization_window(url)
         state, code = SpotifyOAuth.parse_auth_response_url(response)
         if self.state is not None and self.state != state:
             raise SpotifyStateError(self.state, state)
@@ -582,6 +580,7 @@ class SpotifyPKCE(SpotifyAuthBase):
     OAUTH_TOKEN_URL = "https://accounts.spotify.com/api/token"
 
     def __init__(self,
+                 authorization_window: Callable,
                  client_id=None,
                  redirect_uri=None,
                  state=None,
@@ -613,6 +612,7 @@ class SpotifyPKCE(SpotifyAuthBase):
         """
 
         super(SpotifyPKCE, self).__init__(requests_session)
+        self.authorization_window = authorization_window
         self.client_id = client_id
         self.redirect_uri = redirect_uri
         self.state = state
@@ -742,17 +742,13 @@ class SpotifyPKCE(SpotifyAuthBase):
         else:
             raise SpotifyOauthError("Server listening on localhost has not been accessed")
 
-    def _get_auth_response_interactive(self, open_browser=False):
+    def _get_auth_response_interactive(self,open_browser=False):
         if open_browser or self.open_browser:
             self._open_auth_url()
             prompt = "Enter the URL you were redirected to: "
         else:
             url = self.get_authorize_url()
-            prompt = (
-                "Go to the following URL: {}\n"
-                "Enter the URL you were redirected to: ".format(url)
-            )
-        response = self._get_user_input(prompt)
+        response = self.authorization_window(url)
         state, code = self.parse_auth_response_url(response)
         if self.state is not None and self.state != state:
             raise SpotifyStateError(self.state, state)
